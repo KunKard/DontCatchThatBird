@@ -1,0 +1,47 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 372790a7ee0c02c4992ad50a98970bd0, type: 3}
+  m_Name: GameConfig
+  m_EditorClassIdentifier: 
+  difficultyLevels:
+  - scoreThreshold: 0
+    minInterval: 2
+    maxInterval: 2.5
+  - scoreThreshold: 50
+    minInterval: 1.7
+    maxInterval: 2.2
+  - scoreThreshold: 100
+    minInterval: 1.5
+    maxInterval: 1.8
+  - scoreThreshold: 200
+    minInterval: 1.2
+    maxInterval: 1.5
+  - scoreThreshold: 500
+    minInterval: 0.8
+    maxInterval: 1.1
+  - scoreThreshold: 1000
+    minInterval: 0.6
+    maxInterval: 0.8
+  baseScore: 10
+  comboMultiplier: 5
+  maxMissCount: 5
+  dangerKeyThresholds:
+  - score: 0
+    count: 1
+  - score: 150
+    count: 2
+  - score: 500
+    count: 3
+  branchCapacity: 10
+  maxBranchCount: 3
+  validKeys: 71000000770000006500000072000000740000007900000075000000690000006f000000700000006100000073000000640000006600000067000000680000006a0000006b0000006c0000007a000000780000006300000076000000620000006e0000006d0000003100000032000000330000003400000035000000360000003700000038000000390000003000000020000000
+  shakeIntensity: 0.1
