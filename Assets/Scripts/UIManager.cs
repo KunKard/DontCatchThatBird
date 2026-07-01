@@ -46,9 +46,13 @@ public class UIManager : MonoBehaviour
         if (branchDisplay == null)
             branchDisplay = FindObjectOfType<BranchDisplay>();
         if (branchDisplay == null)
-            Debug.LogWarning("UIManager: 未找到 BranchDisplay，请手动创建 BranchDisplay GameObject 并执行 Create Branch。");
-        else
-            branchDisplay.CreateEditorBranch();
+        {
+            GameObject bd = new GameObject("BranchDisplay", typeof(BranchDisplay));
+            bd.transform.SetParent(transform, false);
+            branchDisplay = bd.GetComponent<BranchDisplay>();
+            branchDisplay.mainCanvas = FindObjectOfType<Canvas>();
+        }
+        branchDisplay.CreateEditorBranch();
 
         Debug.Log("UIManager: UI 文本已创建。");
     }
@@ -92,9 +96,29 @@ public class UIManager : MonoBehaviour
     {
         if (jumpTimerText == null) return;
         var gm = GameManager.Instance;
-        if (gm == null || gm.state != GameManager.GameState.Playing || gm.currentBird == null)
-        { jumpTimerText.text = "Next: --"; return; }
+        if (gm == null || gm.state != GameManager.GameState.Playing || gm.currentBird == null) return;
         jumpTimerText.text = $"Next: {gm.currentBird.TimeUntilJump:F1}s";
+    }
+
+    // ========== Ready ==========
+
+    public void OnReady()
+    {
+        SetText(scoreText, "Press the key the bird is on to catch it!");
+        SetText(comboText, "Avoid the Danger Key — game over instantly!");
+        SetText(missText, "");
+        SetText(dangerText, "");
+        int bestScore = PlayerPrefs.GetInt("BestScore", 0);
+        SetText(bestScoreText, $"Best: {bestScore}");
+
+        // 用 jumpTimerText 显示开始提示
+        if (jumpTimerText != null)
+        {
+            jumpTimerText.text = "Press [SPACE] to start";
+            jumpTimerText.fontSize = 26;
+            jumpTimerText.alignment = TextAlignmentOptions.Center;
+            jumpTimerText.color = Color.black;
+        }
     }
 
     // ========== GameStart ==========
@@ -106,7 +130,11 @@ public class UIManager : MonoBehaviour
         SetText(missText, "Miss: 0/5");
         SetColor(missText, Color.black);
         SetText(dangerText, "Danger: -");
-        SetText(jumpTimerText, "Next: --");
+        if (jumpTimerText != null)
+        {
+            jumpTimerText.text = "Next: --";
+            jumpTimerText.fontSize = 22;
+        }
         ResetComboColor();
 
         if (branchDisplay != null) branchDisplay.OnGameStart();

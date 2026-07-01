@@ -47,6 +47,19 @@ public class BranchDisplay : MonoBehaviour
         if (mainCanvas == null) mainCanvas = FindObjectOfType<Canvas>();
         ScanForExistingBranches();
         if (_branches.Count == 0) SpawnBranchInternal();
+        ApplyDoodleToAllBranches();
+    }
+
+    void ApplyDoodleToAllBranches()
+    {
+        if (MaterialProvider.Instance == null) return;
+        var mat = MaterialProvider.Instance.GetMaterial();
+        if (mat == null) return;
+        for (int i = 0; i < _branches.Count; i++)
+        {
+            var img = _branches[i].gameObject.GetComponent<Image>();
+            if (img != null) img.material = mat;
+        }
     }
 
     // ========== 公共接口 ==========
@@ -161,8 +174,9 @@ public class BranchDisplay : MonoBehaviour
             go = new GameObject("Branch_" + _branches.Count, typeof(RectTransform));
             go.transform.SetParent(canvasT, false);
             Image img = go.AddComponent<Image>();
-            img.color = new Color(0.2f, 0.2f, 0.2f);
+            img.color = Color.white;
             img.raycastTarget = false;
+            img.sprite = GetBranchSprite();
         }
 
         RectTransform rt = go.GetComponent<RectTransform>();
@@ -173,6 +187,11 @@ public class BranchDisplay : MonoBehaviour
         if (branchPrefab == null) rt.sizeDelta = new Vector2(640, 14);
 
         go.transform.SetAsLastSibling();
+
+        // 应用 Doodle 材质（树枝描边）
+        Image branchImg = go.GetComponent<Image>();
+        if (MaterialProvider.Instance != null && branchImg != null)
+            branchImg.material = MaterialProvider.Instance.GetMaterial();
 
         Transform container = go.transform.Find("BirdContainer");
         if (container == null)
@@ -196,5 +215,28 @@ public class BranchDisplay : MonoBehaviour
         if (underscore < 0) return 0;
         int.TryParse(name.Substring(underscore + 1), out int idx);
         return idx;
+    }
+
+    // ========== 树枝 Sprite 生成 ==========
+
+    static Sprite _branchSprite;
+    static Sprite GetBranchSprite()
+    {
+        if (_branchSprite != null) return _branchSprite;
+        int margin = 4;
+        Texture2D tex = new Texture2D(640 + margin * 2, 14 + margin * 2, TextureFormat.RGBA32, false);
+        Color[] pixels = new Color[tex.width * tex.height];
+        for (int y = 0; y < tex.height; y++)
+        {
+            for (int x = 0; x < tex.width; x++)
+            {
+                bool edge = x < margin || x >= tex.width - margin || y < margin || y >= tex.height - margin;
+                pixels[y * tex.width + x] = edge ? Color.clear : Color.white;
+            }
+        }
+        tex.SetPixels(pixels);
+        tex.Apply();
+        _branchSprite = Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height), new Vector2(0.5f, 0.5f));
+        return _branchSprite;
     }
 }

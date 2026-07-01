@@ -29,7 +29,10 @@ public class KeyboardDisplay : MonoBehaviour
     };
 
     Dictionary<KeyCode, Image> _keyMap = new Dictionary<KeyCode, Image>();
+    Dictionary<Image, Coroutine> _activeFlashes = new Dictionary<Image, Coroutine>();
     Image _currentHighlight;
+
+    static Sprite _whiteSquareSprite; // 带透明边距的白色方块，共享
 
     // ========== Editor 一键生成 ==========
 
@@ -71,9 +74,10 @@ public class KeyboardDisplay : MonoBehaviour
         img.color = normalBg;
         img.raycastTarget = false;
 
-        var outline = go.AddComponent<Outline>();
-        outline.effectColor = Color.black;
-        outline.effectDistance = new Vector2(1, -1);
+        // 使用带透明边距的 Sprite，让 Shader 可检测到 alpha 边缘
+        if (_whiteSquareSprite == null)
+            _whiteSquareSprite = GenerateMarginSprite(Mathf.RoundToInt(width), Mathf.RoundToInt(keyHeight), 8);
+        img.sprite = _whiteSquareSprite;
 
         _keyMap[key] = img;
 
@@ -98,6 +102,40 @@ public class KeyboardDisplay : MonoBehaviour
     void Awake()
     {
         if (_keyMap.Count == 0) RebuildMap();
+    }
+
+    void Start()
+    {
+        ApplyDoodleMaterial();
+    }
+
+    void ApplyDoodleMaterial()
+    {
+        if (MaterialProvider.Instance == null) return;
+        var mat = MaterialProvider.Instance.GetMaterial();
+        if (mat == null) return;
+        foreach (var kv in _keyMap)
+            if (kv.Value != null) kv.Value.material = mat;
+    }
+
+    /// <summary>生成带透明边距的白色方块 Sprite（alpha 边缘 → Shader 可描边）</summary>
+    static Sprite GenerateMarginSprite(int innerW, int innerH, int margin)
+    {
+        int w = innerW + margin * 2;
+        int h = innerH + margin * 2;
+        Texture2D tex = new Texture2D(w, h, TextureFormat.RGBA32, false);
+        Color[] pixels = new Color[w * h];
+        for (int y = 0; y < h; y++)
+        {
+            for (int x = 0; x < w; x++)
+            {
+                bool edge = x < margin || x >= w - margin || y < margin || y >= h - margin;
+                pixels[y * w + x] = edge ? Color.clear : Color.white;
+            }
+        }
+        tex.SetPixels(pixels);
+        tex.Apply();
+        return Sprite.Create(tex, new Rect(0, 0, w, h), new Vector2(0.5f, 0.5f), 100f, 0, SpriteMeshType.FullRect);
     }
 
     void RebuildMap()
@@ -136,30 +174,40 @@ public class KeyboardDisplay : MonoBehaviour
     public void FlashCorrectKey(KeyCode key)
     {
         if (_keyMap.TryGetValue(key, out var img) && img != null)
-            StartCoroutine(FlashColor(img, new Color(0.5f, 1f, 0.5f)));
+            StartFlash(img, new Color(0.5f, 1f, 0.5f));
     }
 
     /// <summary>按错键 — 浅红</summary>
     public void FlashWrongKey(KeyCode key)
     {
         if (_keyMap.TryGetValue(key, out var img) && img != null)
-            StartCoroutine(FlashColor(img, new Color(1f, 0.6f, 0.6f)));
+            StartFlash(img, new Color(1f, 0.6f, 0.6f));
     }
 
     /// <summary>按到 DangerKey — 深红</summary>
     public void FlashDangerKey(KeyCode key)
     {
         if (_keyMap.TryGetValue(key, out var img) && img != null)
-            StartCoroutine(FlashColor(img, new Color(0.8f, 0.2f, 0.2f)));
+            StartFlash(img, new Color(0.8f, 0.2f, 0.2f));
     }
 
-    System.Collections.IEnumerator FlashColor(Image img, Color flashColor)
+    void StartFlash(Image img, Color flashColor)
+    {
+        if (_activeFlashes.TryGetValue(img, out var old))
+        {
+            StopCoroutine(old);
+            _activeFlashes.Remove(img);
+        }
+        _activeFlashes[img] = StartCoroutine(FlashRoutine(img, flashColor));
+    }
+
+    System.Collections.IEnumerator FlashRoutine(Image img, Color flashColor)
     {
         img.color = flashColor;
         yield return new WaitForSeconds(0.25f);
-        // 恢复白色（如果没被新鸟高亮覆盖的话）
-        if (img != _currentHighlight)
+        if (!_activeFlashes.ContainsKey(img) || img != _currentHighlight)
             img.color = normalBg;
+        _activeFlashes.Remove(img);
     }
 
     public void ClearHighlight()

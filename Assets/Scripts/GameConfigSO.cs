@@ -34,6 +34,11 @@ public class GameConfigSO : ScriptableObject
     public int branchCapacity = 10;
     public int maxBranchCount = 3;
 
+    [Header("音量")]
+    [Range(0f, 1f)] public float masterVolume = 1f;
+    [Range(0f, 1f)] public float sfxVolume = 1f;
+    [Range(0f, 1f)] public float bgmVolume = 1f;
+
     [Header("键盘布局")]
     public KeyCode[] validKeys = new KeyCode[]
     {
@@ -50,6 +55,8 @@ public class GameConfigSO : ScriptableObject
         KeyCode.Space,
     };
 
+    [Header("Shader — 手绘描边")]
+    public DoodleConfig doodle = new DoodleConfig();
 }
 
 [System.Serializable]
@@ -65,4 +72,18 @@ public class DifficultyLevel
     public int scoreThreshold;
     public float minInterval;
     public float maxInterval;
+}
+
+[System.Serializable]
+public class DoodleConfig
+{
+    [Header("Image Outline")]
+    [Range(0f, 10f)] public float outlineWidth = 5f;
+    [Range(0f, 1f)] public float outlineDensity = 0.75f;
+    [Range(1f, 50f)] public float noiseScale = 12f;
+    [Range(0f, 2f)] public float outlineJitter = 0.5f;
+    [Range(0f, 10f)] public float outlineSpeed = 2f;
+    [Range(0f, 2f)] public float bodyJitter = 0.25f;
+    [Range(0f, 10f)] public float bodySpeed = 1f;
+
 }

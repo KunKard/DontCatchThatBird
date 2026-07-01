@@ -3,25 +3,26 @@ using UnityEngine.UI;
 
 /// <summary>
 /// 游戏状态机。唯一的大脑：管理输入监听、分数/连击、Miss计数、
-/// DangerKey、三种GameOver条件、计时器、重启。
+/// DangerKey、三种GameOver条件、重启。
 /// </summary>
 public class GameManager : MonoBehaviour
 {
     public static GameManager Instance { get; private set; }
 
-    public enum GameState { Playing, GameOver }
+    public enum GameState { Ready, Playing, GameOver }
 
     [Header("引用")]
     public GameConfigSO config;
     public KeyboardDisplay keyboardDisplay;
     public UIManager uiManager;
     public Canvas mainCanvas;
+    public MaterialProvider materialProvider;
 
     // 运行时缓存
     Sprite _birdSprite;
 
     [Header("运行时状态")]
-    public GameState state = GameState.Playing;
+    public GameState state = GameState.Ready;
     public int score;
     public int combo;
     public int missCount;
@@ -31,20 +32,47 @@ public class GameManager : MonoBehaviour
 
     public Bird currentBird { get; private set; }
 
+    // 准备界面的装饰鸟
+    GameObject _readyBird;
+
     void Awake()
     {
         if (Instance != null) { Destroy(gameObject); return; }
         Instance = this;
         _bestScore = PlayerPrefs.GetInt("BestScore", 0);
+
+        if (materialProvider == null)
+            materialProvider = FindObjectOfType<MaterialProvider>();
+        if (materialProvider == null)
+        {
+            var go = new GameObject("MaterialProvider", typeof(MaterialProvider));
+            materialProvider = go.GetComponent<MaterialProvider>();
+        }
+        materialProvider.Init(config);
     }
 
     void Start()
     {
-        StartGame();
+        Cursor.visible = false;
+        Cursor.lockState = CursorLockMode.Confined;
+        EnterReady();
     }
 
     void Update()
     {
+        // Alt 键按住时显示鼠标
+        if (Input.GetKey(KeyCode.LeftAlt) || Input.GetKey(KeyCode.RightAlt))
+            Cursor.visible = true;
+        else
+            Cursor.visible = false;
+
+        if (state == GameState.Ready)
+        {
+            if (Input.GetKeyDown(KeyCode.Space))
+                StartGame();
+            return;
+        }
+
         if (state == GameState.GameOver)
         {
             if (Input.GetKeyDown(KeyCode.Space))
@@ -52,7 +80,7 @@ public class GameManager : MonoBehaviour
             return;
         }
 
-        // 遍历 37 键输入
+        // Playing: 遍历 37 键输入
         for (int i = 0; i < config.validKeys.Length; i++)
         {
             if (Input.GetKeyDown(config.validKeys[i]))
@@ -60,33 +88,65 @@ public class GameManager : MonoBehaviour
         }
     }
 
+    // ========== Ready ==========
+
+    void EnterReady()
+    {
+        state = GameState.Ready;
+        uiManager.OnReady();
+        SpawnReadyBird();
+    }
+
+    void SpawnReadyBird()
+    {
+        if (_birdSprite == null) _birdSprite = Bird.CreateCircleSprite(128);
+
+        _readyBird = new GameObject("ReadyBird", typeof(RectTransform));
+        _readyBird.transform.SetParent(mainCanvas != null ? mainCanvas.transform : transform, false);
+
+        Image img = _readyBird.AddComponent<Image>();
+        img.sprite = _birdSprite;
+        img.color = Color.black;
+        img.raycastTarget = false;
+
+        var mat = materialProvider != null ? materialProvider.GetMaterial() : null;
+        if (mat != null) img.material = mat;
+
+        // 放在键盘中间上方
+        RectTransform rt = _readyBird.GetComponent<RectTransform>();
+        rt.sizeDelta = new Vector2(64, 64);
+        rt.anchoredPosition = new Vector2(0, 200);
+    }
+
+    // ========== Playing ==========
+
     void OnKeyPressed(KeyCode key)
     {
         if (state != GameState.Playing || currentBird == null) return;
 
-        // 检查是否 DangerKey
         if (currentBird.IsDangerKey(key))
         {
             keyboardDisplay.FlashDangerKey(key);
+            AudioManager.Instance?.PlayDanger();
             TriggerGameOver(GameOverReason.DangerKey);
             return;
         }
 
-        // 检查是否 BirdKey
         if (key == currentBird.CurrentKey)
         {
-            keyboardDisplay.ClearHighlight();           // 先清掉旧黄色高亮
-            keyboardDisplay.FlashCorrectKey(key);       // 再闪绿
+            keyboardDisplay.ClearHighlight();
+            keyboardDisplay.FlashCorrectKey(key);
+            AudioManager.Instance?.PlayCatch();
             CatchBird();
         }
         else
         {
-            // 按错键 → Combo 清零 + Miss++
             combo = 0;
             missCount++;
             uiManager.UpdateCombo(combo);
             uiManager.UpdateMiss(missCount);
             keyboardDisplay.FlashWrongKey(key);
+            AudioManager.Instance?.PlayMiss();
             if (missCount >= config.maxMissCount)
                 TriggerGameOver(GameOverReason.MissLimit);
         }
@@ -94,7 +154,6 @@ public class GameManager : MonoBehaviour
 
     void CatchBird()
     {
-        // 计分
         score += config.baseScore + combo * config.comboMultiplier;
         combo++;
         missCount = 0;
@@ -102,14 +161,12 @@ public class GameManager : MonoBehaviour
 
         if (combo > highestCombo) highestCombo = combo;
 
-        // UI 更新
         uiManager.UpdateScore(score);
         uiManager.UpdateCombo(combo);
         uiManager.UpdateMiss(missCount);
 
-        // 旧鸟飞向树枝并停留
         Bird oldBird = currentBird;
-        SpawnBird();  // 先生成新鸟，旧鸟同时飞走
+        SpawnBird();
         oldBird.FlyToBranch(uiManager.GetBranchContainer(), uiManager.GetNextBranchX());
     }
 
@@ -143,22 +200,87 @@ public class GameManager : MonoBehaviour
             keyboardDisplay.ClearHighlight();
             bird.transform.position = keyboardDisplay.GetKeyPosition(newKey);
             keyboardDisplay.HighlightKey(newKey);
+            AudioManager.Instance?.PlayJump();
             OnBirdJumped();
         };
 
-        // 定位到对应键上方
+        var mat = materialProvider != null ? materialProvider.GetMaterial() : null;
+        if (mat != null) img.material = mat;
+
         go.transform.position = keyboardDisplay.GetKeyPosition(birdKey);
 
         keyboardDisplay.HighlightKey(birdKey);
         uiManager.UpdateDangerKeys(dangerKeys);
     }
 
+    // ========== 游戏流程 ==========
+
+    void StartGame()
+    {
+        state = GameState.Playing;
+        AudioManager.Instance?.DuckBGM(false);
+
+        score = 0;
+        combo = 0;
+        missCount = 0;
+        highestCombo = 0;
+        totalCaught = 0;
+
+        // 清理 ready bird
+        if (_readyBird != null) Destroy(_readyBird);
+
+        // 清理旧鸟
+        if (currentBird != null) Destroy(currentBird.gameObject);
+
+        uiManager.OnGameStart();
+        uiManager.UpdateBestScore(_bestScore);
+        SpawnBird();
+    }
+
+    public void OnBirdJumped()
+    {
+        missCount++;
+        uiManager.UpdateMiss(missCount);
+        if (missCount >= config.maxMissCount)
+            TriggerGameOver(GameOverReason.MissLimit);
+    }
+
+    public enum GameOverReason { DangerKey, MissLimit }
+
+    public static string ReasonToText(GameOverReason reason) => reason switch
+    {
+        GameOverReason.DangerKey => "Danger Key!",
+        GameOverReason.MissLimit => "Bird flew away!",
+        _ => "Game Over",
+    };
+
+    void TriggerGameOver(GameOverReason reason)
+    {
+        state = GameState.GameOver;
+        AudioManager.Instance?.DuckBGM(true);
+        if (currentBird != null) currentBird.SetActive(false);
+        if (score > _bestScore)
+        {
+            _bestScore = score;
+            AudioManager.Instance?.PlayNewBest();
+            PlayerPrefs.SetInt("BestScore", _bestScore);
+            PlayerPrefs.Save();
+        }
+        uiManager.ShowGameOverText(reason, score, _bestScore, highestCombo, totalCaught);
+    }
+
+    public void Restart()
+    {
+        StartGame();
+    }
+
+    // ========== 工具 ==========
+
     KeyCode[] PickDangerKeys(int count)
     {
         if (count <= 0) return new KeyCode[0];
         if (count >= config.validKeys.Length) count = config.validKeys.Length - 1;
 
-        // 从 validKeys 中随机抽 count 个不重复的
         KeyCode[] pool = (KeyCode[])config.validKeys.Clone();
         for (int i = 0; i < count; i++)
         {
@@ -191,7 +313,6 @@ public class GameManager : MonoBehaviour
 
     public KeyCode PickRandomKeyExcluding(KeyCode[] excludes)
     {
-        // 构建候选人列表（排除的键不加入）
         KeyCode[] pool = new KeyCode[config.validKeys.Length];
         int poolSize = 0;
         for (int i = 0; i < config.validKeys.Length; i++)
@@ -204,60 +325,7 @@ public class GameManager : MonoBehaviour
             if (!excluded) pool[poolSize++] = config.validKeys[i];
         }
 
-        if (poolSize == 0) return config.validKeys[0]; // 不可能全部排除
+        if (poolSize == 0) return config.validKeys[0];
         return pool[Random.Range(0, poolSize)];
-    }
-
-    public void OnBirdJumped()
-    {
-        missCount++;
-        uiManager.UpdateMiss(missCount);
-        if (missCount >= config.maxMissCount)
-            TriggerGameOver(GameOverReason.MissLimit);
-    }
-
-    void StartGame()
-    {
-        state = GameState.Playing;
-        score = 0;
-        combo = 0;
-        missCount = 0;
-        highestCombo = 0;
-        totalCaught = 0;
-
-        // 清理旧鸟（避免残留）
-        if (currentBird != null)
-            Destroy(currentBird.gameObject);
-
-        uiManager.OnGameStart();
-        uiManager.UpdateBestScore(_bestScore);
-        SpawnBird();
-    }
-
-    public enum GameOverReason { DangerKey, MissLimit }
-
-    public static string ReasonToText(GameOverReason reason) => reason switch
-    {
-        GameOverReason.DangerKey => "Danger Key!",
-        GameOverReason.MissLimit => "Bird flew away!",
-        _ => "Game Over",
-    };
-
-    void TriggerGameOver(GameOverReason reason)
-    {
-        state = GameState.GameOver;
-        if (currentBird != null) currentBird.SetActive(false);
-        if (score > _bestScore)
-        {
-            _bestScore = score;
-            PlayerPrefs.SetInt("BestScore", _bestScore);
-            PlayerPrefs.Save();
-        }
-        uiManager.ShowGameOverText(reason, score, _bestScore, highestCombo, totalCaught);
-    }
-
-    public void Restart()
-    {
-        StartGame();
     }
 }
