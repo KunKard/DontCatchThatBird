@@ -12,8 +12,8 @@ public class AudioManager : MonoBehaviour
     [Header("配置")]
     public GameConfigSO config;
 
-    [Header("BGM")]
-    public AudioClip bgmClip;
+    [Header("BGM（拖入多个，启动时随机选一个播放）")]
+    public AudioClip[] bgmClips;
 
     [Header("SFX — 拖入音效资源（空则自动生成占位音）")]
     public AudioClip catchClip;
@@ -44,7 +44,11 @@ public class AudioManager : MonoBehaviour
 
     void Start()
     {
-        if (bgmClip != null) PlayBGM(bgmClip);
+        if (bgmClips != null && bgmClips.Length > 0)
+        {
+            var clip = bgmClips[Random.Range(0, bgmClips.Length)];
+            if (clip != null) PlayBGM(clip);
+        }
     }
 
     // ========== 音效 Play 方法 ==========

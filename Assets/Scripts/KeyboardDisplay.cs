@@ -10,10 +10,16 @@ using System.Collections.Generic;
 public class KeyboardDisplay : MonoBehaviour
 {
     [Header("按键尺寸")]
-    public float keyWidth = 68f;
-    public float keyHeight = 68f;
-    public float spacing = 10f;
-    public float fontSize = 22f;
+    public float keyWidth = 84f;
+    public float keyHeight = 84f;
+    public float spacing = 12f;
+    public float fontSize = 26f;
+
+    [Header("字体")]
+    public TMP_FontAsset keyFont;
+
+    [Header("描边")]
+    public float outlineWidth = 2f;
 
     [Header("高亮颜色")]
     public Color normalBg = Color.white;
@@ -79,6 +85,11 @@ public class KeyboardDisplay : MonoBehaviour
             _whiteSquareSprite = GenerateMarginSprite(Mathf.RoundToInt(width), Mathf.RoundToInt(keyHeight), 8);
         img.sprite = _whiteSquareSprite;
 
+        // 黑色描边
+        var outline = go.AddComponent<Outline>();
+        outline.effectColor = Color.black;
+        outline.effectDistance = new Vector2(outlineWidth, -outlineWidth);
+
         _keyMap[key] = img;
 
         // TMP 标签
@@ -91,6 +102,7 @@ public class KeyboardDisplay : MonoBehaviour
 
         TextMeshProUGUI tmp = label.AddComponent<TextMeshProUGUI>();
         tmp.text = KeyToString(key);
+        tmp.font = keyFont;
         tmp.fontSize = (key == KeyCode.Space) ? fontSize - 4f : fontSize;
         tmp.alignment = TextAlignmentOptions.Center;
         tmp.color = Color.black;
@@ -106,16 +118,6 @@ public class KeyboardDisplay : MonoBehaviour
 
     void Start()
     {
-        ApplyDoodleMaterial();
-    }
-
-    void ApplyDoodleMaterial()
-    {
-        if (MaterialProvider.Instance == null) return;
-        var mat = MaterialProvider.Instance.GetMaterial();
-        if (mat == null) return;
-        foreach (var kv in _keyMap)
-            if (kv.Value != null) kv.Value.material = mat;
     }
 
     /// <summary>生成带透明边距的白色方块 Sprite（alpha 边缘 → Shader 可描边）</summary>

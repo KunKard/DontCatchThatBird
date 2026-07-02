@@ -1,5 +1,7 @@
 using UnityEngine;
 using UnityEngine.UI;
+using System.Collections;
+using System.Collections.Generic;
 
 /// <summary>
 /// 游戏状态机。唯一的大脑：管理输入监听、分数/连击、Miss计数、
@@ -16,10 +18,11 @@ public class GameManager : MonoBehaviour
     public KeyboardDisplay keyboardDisplay;
     public UIManager uiManager;
     public Canvas mainCanvas;
-    public MaterialProvider materialProvider;
 
-    // 运行时缓存
-    Sprite _birdSprite;
+    [Header("小鸟 Sprite（拖入美术资源）")]
+    public BirdSprites birdSprites;
+
+    Sprite _fallbackCircle;
 
     [Header("运行时状态")]
     public GameState state = GameState.Ready;
@@ -32,8 +35,10 @@ public class GameManager : MonoBehaviour
 
     public Bird currentBird { get; private set; }
 
-    // 准备界面的装饰鸟
+    // 准备界面的装饰鸟（按空格后直接变第一只游戏鸟）
     GameObject _readyBird;
+    KeyCode _readyBirdKey;
+    KeyCode[] _readyDangerKeys;
 
     void Awake()
     {
@@ -41,14 +46,12 @@ public class GameManager : MonoBehaviour
         Instance = this;
         _bestScore = PlayerPrefs.GetInt("BestScore", 0);
 
-        if (materialProvider == null)
-            materialProvider = FindObjectOfType<MaterialProvider>();
-        if (materialProvider == null)
+        // 自动创建 ParticleManager
+        if (FindObjectOfType<ParticleManager>() == null)
         {
-            var go = new GameObject("MaterialProvider", typeof(MaterialProvider));
-            materialProvider = go.GetComponent<MaterialProvider>();
+            var go = new GameObject("ParticleManager", typeof(ParticleManager));
+            go.GetComponent<ParticleManager>().mainCanvas = mainCanvas;
         }
-        materialProvider.Init(config);
     }
 
     void Start()
@@ -68,7 +71,7 @@ public class GameManager : MonoBehaviour
 
         if (state == GameState.Ready)
         {
-            if (Input.GetKeyDown(KeyCode.Space))
+            if (Input.GetKeyDown(KeyCode.Space) && _readyBird != null)
                 StartGame();
             return;
         }
@@ -97,25 +100,37 @@ public class GameManager : MonoBehaviour
         SpawnReadyBird();
     }
 
+    Sprite GetFallbackCircle()
+    {
+        if (_fallbackCircle == null) _fallbackCircle = Bird.CreateCircleSprite(128);
+        return _fallbackCircle;
+    }
+
     void SpawnReadyBird()
     {
-        if (_birdSprite == null) _birdSprite = Bird.CreateCircleSprite(128);
+        // 预选第一只鸟的键位和 DangerKeys
+        int dangerCount = GetDangerKeyCount();
+        _readyBirdKey = PickRandomKeyExcluding(new KeyCode[0]);
+        _readyDangerKeys = PickDangerKeysNear(dangerCount, _readyBirdKey);
+        if (_readyBirdKey == KeyCode.None) _readyBirdKey = config.validKeys[0];
+
+        bool hasArt = birdSprites.normal != null;
+        Sprite sprite = hasArt ? birdSprites.normal : GetFallbackCircle();
+        Color color = hasArt ? Color.white : Color.black;
 
         _readyBird = new GameObject("ReadyBird", typeof(RectTransform));
         _readyBird.transform.SetParent(mainCanvas != null ? mainCanvas.transform : transform, false);
 
         Image img = _readyBird.AddComponent<Image>();
-        img.sprite = _birdSprite;
-        img.color = Color.black;
+        img.sprite = sprite;
+        img.color = color;
         img.raycastTarget = false;
-
-        var mat = materialProvider != null ? materialProvider.GetMaterial() : null;
-        if (mat != null) img.material = mat;
+        img.preserveAspect = true;
 
         // 放在键盘中间上方
         RectTransform rt = _readyBird.GetComponent<RectTransform>();
-        rt.sizeDelta = new Vector2(64, 64);
-        rt.anchoredPosition = new Vector2(0, 200);
+        rt.sizeDelta = new Vector2(128, 128);
+        rt.anchoredPosition = new Vector2(0, 280);
     }
 
     // ========== Playing ==========
@@ -128,6 +143,7 @@ public class GameManager : MonoBehaviour
         {
             keyboardDisplay.FlashDangerKey(key);
             AudioManager.Instance?.PlayDanger();
+            ParticleManager.Instance?.FlashDangerScreen();
             TriggerGameOver(GameOverReason.DangerKey);
             return;
         }
@@ -165,47 +181,54 @@ public class GameManager : MonoBehaviour
         uiManager.UpdateCombo(combo);
         uiManager.UpdateMiss(missCount);
 
+        if (currentBird != null)
+            ParticleManager.Instance?.SpawnCatchParticles(currentBird.transform.position);
+
         Bird oldBird = currentBird;
         SpawnBird();
-        oldBird.FlyToBranch(uiManager.GetBranchContainer(), uiManager.GetNextBranchX());
+        float branchX = uiManager.GetNextBranchX();
+        if (branchX == BranchDisplay.NO_SLOT)
+        {
+            Destroy(oldBird.gameObject); // 树枝已满，鸟消失
+        }
+        else
+        {
+            Transform branchContainer = uiManager.GetBranchContainer();
+            oldBird.FlyToBranch(branchContainer, branchX);
+        }
     }
 
     public void SpawnBird()
     {
         int dangerKeyCount = GetDangerKeyCount();
-        KeyCode[] dangerKeys = PickDangerKeys(dangerKeyCount);
 
-        KeyCode birdKey = PickRandomKeyExcluding(dangerKeys);
+        // 先选鸟键，再围绕鸟键选 DangerKeys
+        KeyCode birdKey = PickRandomKeyExcluding(new KeyCode[0]);
         if (birdKey == KeyCode.None) birdKey = config.validKeys[0];
+        KeyCode[] dangerKeys = PickDangerKeysNear(dangerKeyCount, birdKey);
 
         Transform parent = mainCanvas != null ? mainCanvas.transform : transform;
-        Color birdColor = Random.ColorHSV(0f, 1f, 0.6f, 1f, 0.7f, 1f);
 
-        if (_birdSprite == null) _birdSprite = Bird.CreateCircleSprite(128);
+        // 使用美术 Sprite（有拖入时），否则 fallback 圆形
+        bool hasArt = birdSprites.normal != null;
+        Sprite normalSprite = hasArt ? birdSprites.normal : GetFallbackCircle();
+        Color birdColor = hasArt ? Color.white : Random.ColorHSV(0f, 1f, 0.6f, 1f, 0.7f, 1f);
+
         GameObject go = new GameObject("Bird", typeof(RectTransform));
         go.transform.SetParent(parent, false);
 
         Image img = go.AddComponent<Image>();
-        img.sprite = _birdSprite;
+        img.sprite = normalSprite;
         img.color = birdColor;
         img.raycastTarget = false;
+        img.preserveAspect = true;
         go.AddComponent<Bird>();
 
         currentBird = go.GetComponent<Bird>();
-        currentBird.Init(birdKey, dangerKeys, config, _birdSprite, birdColor, isActive: true);
         currentBird.JumpInterval = GetBirdInterval(score);
-        currentBird.PickNextKey = excludes => PickRandomKeyExcluding(excludes);
-        currentBird.OnJumped += (bird, newKey) =>
-        {
-            keyboardDisplay.ClearHighlight();
-            bird.transform.position = keyboardDisplay.GetKeyPosition(newKey);
-            keyboardDisplay.HighlightKey(newKey);
-            AudioManager.Instance?.PlayJump();
-            OnBirdJumped();
-        };
-
-        var mat = materialProvider != null ? materialProvider.GetMaterial() : null;
-        if (mat != null) img.material = mat;
+        currentBird.Init(birdKey, dangerKeys, config,
+            normalSprite, birdSprites.fly, birdSprites.stand, birdColor, isActive: true);
+        WireUpBird(currentBird);
 
         go.transform.position = keyboardDisplay.GetKeyPosition(birdKey);
 
@@ -213,11 +236,23 @@ public class GameManager : MonoBehaviour
         uiManager.UpdateDangerKeys(dangerKeys);
     }
 
+    void WireUpBird(Bird bird)
+    {
+        bird.PickNextKey = excludes => PickRandomKeyExcluding(excludes);
+        bird.OnJumped += (b, newKey) =>
+        {
+            keyboardDisplay.ClearHighlight();
+            b.transform.position = keyboardDisplay.GetKeyPosition(newKey);
+            keyboardDisplay.HighlightKey(newKey);
+            AudioManager.Instance?.PlayJump();
+            OnBirdJumped();
+        };
+    }
+
     // ========== 游戏流程 ==========
 
     void StartGame()
     {
-        state = GameState.Playing;
         AudioManager.Instance?.DuckBGM(false);
 
         score = 0;
@@ -226,15 +261,61 @@ public class GameManager : MonoBehaviour
         highestCombo = 0;
         totalCaught = 0;
 
-        // 清理 ready bird
-        if (_readyBird != null) Destroy(_readyBird);
+        if (currentBird != null && currentBird.gameObject != _readyBird)
+            Destroy(currentBird.gameObject);
 
-        // 清理旧鸟
-        if (currentBird != null) Destroy(currentBird.gameObject);
+        if (_readyBird != null)
+        {
+            Image img = _readyBird.GetComponent<Image>();
+            if (img != null) img.sprite = birdSprites.normal ?? GetFallbackCircle();
 
+            var bird = _readyBird.AddComponent<Bird>();
+            bird.JumpInterval = GetBirdInterval(0);
+            bird.Init(_readyBirdKey, _readyDangerKeys, config,
+                birdSprites.normal, birdSprites.fly, birdSprites.stand, Color.white, isActive: false);
+            WireUpBird(bird);
+            currentBird = bird;
+            Vector3 targetPos = keyboardDisplay.GetKeyPosition(_readyBirdKey);
+            _readyBird = null;
+
+            StartCoroutine(FlyToKeyAndStart(bird, targetPos, _readyBirdKey, img));
+        }
+        else
+        {
+            uiManager.OnGameStart();
+            uiManager.UpdateBestScore(_bestScore);
+            state = GameState.Playing;
+            SpawnBird();
+        }
+    }
+
+    System.Collections.IEnumerator FlyToKeyAndStart(Bird bird, Vector3 targetPos, KeyCode key, Image img)
+    {
+        Vector3 startPos = bird.transform.position;
+        float duration = 0.7f;
+        float t = 0f;
+
+        if (birdSprites.fly != null && img != null) img.sprite = birdSprites.fly;
+
+        while (t < duration)
+        {
+            t += Time.deltaTime;
+            float p = t / duration;
+            float ease = 1f - (1f - p) * (1f - p);
+            bird.transform.position = Vector3.Lerp(startPos, targetPos, ease);
+            yield return null;
+        }
+
+        bird.transform.position = targetPos;
+
+        if (birdSprites.normal != null && img != null) img.sprite = birdSprites.normal;
+
+        keyboardDisplay.HighlightKey(key);
         uiManager.OnGameStart();
         uiManager.UpdateBestScore(_bestScore);
-        SpawnBird();
+        uiManager.UpdateDangerKeys(_readyDangerKeys);
+        bird.SetActive(true);
+        state = GameState.Playing;
     }
 
     public void OnBirdJumped()
@@ -249,9 +330,9 @@ public class GameManager : MonoBehaviour
 
     public static string ReasonToText(GameOverReason reason) => reason switch
     {
-        GameOverReason.DangerKey => "Danger Key!",
-        GameOverReason.MissLimit => "Bird flew away!",
-        _ => "Game Over",
+        GameOverReason.DangerKey => "危险键！",
+        GameOverReason.MissLimit => "小鸟飞走了！",
+        _ => "游戏结束",
     };
 
     void TriggerGameOver(GameOverReason reason)
@@ -276,20 +357,40 @@ public class GameManager : MonoBehaviour
 
     // ========== 工具 ==========
 
-    KeyCode[] PickDangerKeys(int count)
+    /// <summary>围绕 birdKey 选 DangerKeys（物理键盘四周的键）</summary>
+    KeyCode[] PickDangerKeysNear(int count, KeyCode birdKey)
     {
         if (count <= 0) return new KeyCode[0];
         if (count >= config.validKeys.Length) count = config.validKeys.Length - 1;
 
-        KeyCode[] pool = (KeyCode[])config.validKeys.Clone();
-        for (int i = 0; i < count; i++)
-        {
-            int r = Random.Range(i, pool.Length);
-            (pool[i], pool[r]) = (pool[r], pool[i]);
-        }
         KeyCode[] result = new KeyCode[count];
-        System.Array.Copy(pool, result, count);
+        List<KeyCode> nearbyPool = KeyboardGridHelper.GetNearbyKeys(birdKey);
+
+        for (int d = 0; d < count; d++)
+        {
+            KeyCode candidate;
+            int attempts = 0;
+            do
+            {
+                bool nearby = Random.value < 0.7f && nearbyPool.Count > 0;
+                if (nearby)
+                    candidate = nearbyPool[Random.Range(0, nearbyPool.Count)];
+                else
+                    candidate = config.validKeys[Random.Range(0, config.validKeys.Length)];
+                attempts++;
+            }
+            while ((candidate == birdKey || ArrayContains(result, candidate)) && attempts < 50);
+
+            result[d] = candidate;
+        }
         return result;
+    }
+
+    bool ArrayContains(KeyCode[] arr, KeyCode key)
+    {
+        for (int i = 0; i < arr.Length; i++)
+            if (arr[i] == key) return true;
+        return false;
     }
 
     int GetDangerKeyCount()
@@ -329,3 +430,12 @@ public class GameManager : MonoBehaviour
         return pool[Random.Range(0, poolSize)];
     }
 }
+
+[System.Serializable]
+public struct BirdSprites
+{
+    public Sprite normal;   // 键盘上正常
+    public Sprite fly;      // 被抓时飞起
+    public Sprite stand;    // 树枝上停留
+}
+

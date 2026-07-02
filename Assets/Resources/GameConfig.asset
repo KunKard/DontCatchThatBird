@@ -17,20 +17,20 @@ MonoBehaviour:
     minInterval: 2
     maxInterval: 2.5
   - scoreThreshold: 50
-    minInterval: 1.7
+    minInterval: 1.8
     maxInterval: 2.2
   - scoreThreshold: 100
-    minInterval: 1.5
-    maxInterval: 1.8
+    minInterval: 1.6
+    maxInterval: 2
   - scoreThreshold: 200
-    minInterval: 1.2
-    maxInterval: 1.5
+    minInterval: 1.3
+    maxInterval: 1.7
   - scoreThreshold: 500
-    minInterval: 0.8
-    maxInterval: 1.1
+    minInterval: 1
+    maxInterval: 1.2
   - scoreThreshold: 1000
-    minInterval: 0.6
-    maxInterval: 0.8
+    minInterval: 0.8
+    maxInterval: 1
   baseScore: 10
   comboMultiplier: 5
   maxMissCount: 5
@@ -47,3 +47,11 @@ MonoBehaviour:
   sfxVolume: 1
   bgmVolume: 1
   validKeys: 71000000770000006500000072000000740000007900000075000000690000006f000000700000006100000073000000640000006600000067000000680000006a0000006b0000006c0000007a000000780000006300000076000000620000006e0000006d0000003100000032000000330000003400000035000000360000003700000038000000390000003000000020000000
+  doodle:
+    outlineWidth: 5
+    outlineDensity: 0.75
+    noiseScale: 12
+    outlineJitter: 0.5
+    outlineSpeed: 2
+    bodyJitter: 0.25
+    bodySpeed: 1

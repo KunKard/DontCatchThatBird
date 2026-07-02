@@ -24,35 +24,28 @@ public class UIManager : MonoBehaviour
     [ContextMenu("Create UI")]
     void CreateUI()
     {
-        scoreText = MakeTMP("ScoreText", "Score: 0", 28,
+        scoreText = MakeTMP("ScoreText", "得分: 0", 28,
             new Vector2(0, 1), new Vector2(0, 1), new Vector2(20, -30), new Vector2(260, 40));
-        comboText = MakeTMP("ComboText", "Combo: 0", 28,
+        comboText = MakeTMP("ComboText", "连击: 0", 28,
             new Vector2(0, 1), new Vector2(0, 1), new Vector2(20, -75), new Vector2(260, 40));
-        dangerText = MakeTMP("DangerText", "Danger: -", 28,
+        dangerText = MakeTMP("DangerText", "危险: -", 28,
             new Vector2(1, 1), new Vector2(1, 1), new Vector2(-20, -30), new Vector2(420, 40));
         dangerText.color = Color.red;
         dangerText.alignment = TextAlignmentOptions.TopRight;
-        missText = MakeTMP("MissText", "Miss: 0/5", 24,
+        missText = MakeTMP("MissText", "失误: 0/5", 24,
             new Vector2(1, 1), new Vector2(1, 1), new Vector2(-20, -75), new Vector2(220, 36));
         missText.alignment = TextAlignmentOptions.TopRight;
-        bestScoreText = MakeTMP("BestScoreText", "Best: 0", 24,
+        bestScoreText = MakeTMP("BestScoreText", "最高: 0", 24,
             new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(0, -30), new Vector2(260, 36));
         bestScoreText.alignment = TextAlignmentOptions.Center;
-        jumpTimerText = MakeTMP("JumpTimerText", "Next: --", 22,
+        jumpTimerText = MakeTMP("JumpTimerText", "下次: --", 22,
             new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0, 140), new Vector2(220, 36));
-        jumpTimerText.alignment = TextAlignmentOptions.Center;
 
         // 创建初始树枝
         if (branchDisplay == null)
             branchDisplay = FindObjectOfType<BranchDisplay>();
         if (branchDisplay == null)
-        {
-            GameObject bd = new GameObject("BranchDisplay", typeof(BranchDisplay));
-            bd.transform.SetParent(transform, false);
-            branchDisplay = bd.GetComponent<BranchDisplay>();
-            branchDisplay.mainCanvas = FindObjectOfType<Canvas>();
-        }
-        branchDisplay.CreateEditorBranch();
+            Debug.LogWarning("UIManager: 未找到 BranchDisplay，请手动创建 BranchDisplay 并将树枝拖入其 Branches 数组。");
 
         Debug.Log("UIManager: UI 文本已创建。");
     }
@@ -80,16 +73,7 @@ public class UIManager : MonoBehaviour
     void Start()
     {
         if (branchDisplay == null)
-        {
             branchDisplay = FindObjectOfType<BranchDisplay>();
-            if (branchDisplay == null)
-            {
-                GameObject bd = new GameObject("BranchDisplay", typeof(BranchDisplay));
-                bd.transform.SetParent(transform, false);
-                branchDisplay = bd.GetComponent<BranchDisplay>();
-                branchDisplay.mainCanvas = FindObjectOfType<Canvas>();
-            }
-        }
     }
 
     void Update()
@@ -97,26 +81,25 @@ public class UIManager : MonoBehaviour
         if (jumpTimerText == null) return;
         var gm = GameManager.Instance;
         if (gm == null || gm.state != GameManager.GameState.Playing || gm.currentBird == null) return;
-        jumpTimerText.text = $"Next: {gm.currentBird.TimeUntilJump:F1}s";
+        jumpTimerText.text = $"下次: {gm.currentBird.TimeUntilJump:F1}s";
     }
 
     // ========== Ready ==========
 
     public void OnReady()
     {
-        SetText(scoreText, "Press the key the bird is on to catch it!");
-        SetText(comboText, "Avoid the Danger Key — game over instantly!");
+        SetText(scoreText, "按下小鸟所在的按键抓住它！");
+        SetText(comboText, "避开危险键 — 按到立即结束！");
         SetText(missText, "");
         SetText(dangerText, "");
         int bestScore = PlayerPrefs.GetInt("BestScore", 0);
-        SetText(bestScoreText, $"Best: {bestScore}");
+        SetText(bestScoreText, $"最高: {bestScore}");
 
         // 用 jumpTimerText 显示开始提示
         if (jumpTimerText != null)
         {
-            jumpTimerText.text = "Press [SPACE] to start";
+            jumpTimerText.text = "按 [空格键] 开始";
             jumpTimerText.fontSize = 26;
-            jumpTimerText.alignment = TextAlignmentOptions.Center;
             jumpTimerText.color = Color.black;
         }
     }
@@ -125,14 +108,14 @@ public class UIManager : MonoBehaviour
 
     public void OnGameStart()
     {
-        SetText(scoreText, "Score: 0");
-        SetText(comboText, "Combo: 0");
-        SetText(missText, "Miss: 0/5");
+        SetText(scoreText, "得分: 0");
+        SetText(comboText, "连击: 0");
+        SetText(missText, "失误: 0/5");
         SetColor(missText, Color.black);
-        SetText(dangerText, "Danger: -");
+        SetText(dangerText, "危险: -");
         if (jumpTimerText != null)
         {
-            jumpTimerText.text = "Next: --";
+            jumpTimerText.text = "下次: --";
             jumpTimerText.fontSize = 22;
         }
         ResetComboColor();
@@ -142,18 +125,31 @@ public class UIManager : MonoBehaviour
 
     // ========== 数据更新 ==========
 
-    public void UpdateScore(int val) => SetText(scoreText, $"Score: {val}");
+    public void UpdateScore(int val) => SetText(scoreText, $"得分: {val}");
     public void UpdateCombo(int val)
     {
-        SetText(comboText, $"Combo: {val}");
         if (comboText == null) return;
-        if (val >= 5)
+        if (val >= 15)
         {
-            comboText.fontSize = 34;
+            comboText.text = $"连击: {val}!!!";
+            comboText.fontSize = 38;
+            comboText.color = new Color(1f, 0.247f, 0f); // #FF3F00 红
+        }
+        else if (val >= 10)
+        {
+            comboText.text = $"连击: {val}!!";
+            comboText.fontSize = 36;
             comboText.color = new Color(1f, 0.5f, 0f); // 橙色
+        }
+        else if (val >= 5)
+        {
+            comboText.text = $"连击: {val}!";
+            comboText.fontSize = 34;
+            comboText.color = new Color(0f, 0.48f, 1f); // #007AFF 蓝
         }
         else
         {
+            comboText.text = $"连击: {val}";
             comboText.fontSize = 28;
             comboText.color = Color.black;
         }
@@ -162,16 +158,16 @@ public class UIManager : MonoBehaviour
     {
         var gm = GameManager.Instance;
         if (gm == null) return;
-        SetText(missText, $"Miss: {val}/{gm.config.maxMissCount}");
+        SetText(missText, $"失误: {val}/{gm.config.maxMissCount}");
         SetColor(missText, val >= 4 ? Color.red : Color.black);
     }
     public void UpdateDangerKeys(KeyCode[] keys)
     {
         if (dangerText == null) return;
-        if (keys == null || keys.Length == 0) { dangerText.text = "Danger: -"; return; }
+        if (keys == null || keys.Length == 0) { dangerText.text = "危险: -"; return; }
         string[] names = new string[keys.Length];
         for (int i = 0; i < keys.Length; i++) names[i] = KeyDisplay(keys[i]);
-        dangerText.text = "Danger: " + string.Join(", ", names);
+        dangerText.text = "危险: " + string.Join(", ", names);
         // 变更时闪黄
         StopCoroutine("FlashDangerText");
         StartCoroutine(FlashDangerText());
@@ -221,19 +217,21 @@ public class UIManager : MonoBehaviour
     public void ShowGameOverText(GameManager.GameOverReason reason, int score, int bestScore, int highestCombo, int totalCaught)
     {
         string reasonText = GameManager.ReasonToText(reason);
-        string newBest = score > bestScore ? " [NEW BEST!]" : "";
-        SetText(scoreText, $"Score: {score} | Combo: {highestCombo} | Caught: {totalCaught}");
-        SetText(comboText, $"{reasonText} — Press [SPACE] to restart{newBest}");
+        string newBest = score > bestScore ? " [新纪录！]" : "";
+        SetText(scoreText, $"得分: {score} | 最高连击: {highestCombo} | 抓到: {totalCaught} 只");
+        SetText(comboText, $"{reasonText} — 按 [空格] 重开{newBest}");
         SetColor(comboText, score > bestScore ? Color.green : Color.red);
-        SetText(bestScoreText, $"Best: {bestScore}");
+        SetText(bestScoreText, $"最高: {bestScore}");
         SetText(dangerText, ""); SetText(missText, ""); SetText(jumpTimerText, "");
     }
 
-    public void UpdateBestScore(int val) => SetText(bestScoreText, $"Best: {val}");
+    public void UpdateBestScore(int val) => SetText(bestScoreText, $"最高: {val}");
     public void ResetComboColor()
     {
-        SetColor(comboText, Color.black);
-        if (comboText != null) comboText.fontSize = 28;
+        if (comboText == null) return;
+        comboText.text = "连击: 0";
+        comboText.fontSize = 28;
+        comboText.color = Color.black;
     }
 
     void SetText(TextMeshProUGUI ui, string val) { if (ui != null) ui.text = val; }
