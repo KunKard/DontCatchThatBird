@@ -741,8 +741,9 @@ public class GameManager : MonoBehaviour
     {
         state = GameState.GameOver;
         AudioManager.Instance?.DuckBGM(true);
-        if (currentBird != null) currentBird.SetActive(false);
-        if (_secondBird != null) { _secondBird.SetActive(false); Destroy(_secondBird.gameObject); _secondBird = null; }
+        keyboardDisplay.ClearHighlight();
+        if (_secondBird != null) { Destroy(_secondBird.gameObject); _secondBird = null; }
+        if (currentBird != null) { Destroy(currentBird.gameObject); currentBird = null; }
         _dualBirdFirstCaught = false;
         _dualBirdTimer = 0f;
         _dualBirdResolved = false;
