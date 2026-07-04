@@ -11,6 +11,7 @@ public class Bird : MonoBehaviour
 {
     public KeyCode CurrentKey { get; private set; }
     public float TimeUntilJump { get; private set; }
+    public bool isGolden;
 
     public Func<KeyCode[], KeyCode> PickNextKey { get; set; }
     public event Action<Bird, KeyCode> OnJumped; // sender, newKey
@@ -34,6 +35,7 @@ public class Bird : MonoBehaviour
         CurrentKey = startKey;
         _dangerKeys = dangerKeys;
         _config = config;
+        if (_config == null) Debug.LogWarning("[Bird] Init 收到 null config！");
         _isActive = isActive;
 
         _normalSprite = normalSprite;
@@ -71,7 +73,8 @@ public class Bird : MonoBehaviour
         // 只排除当前键（不排除 DangerKeys，小鸟可能跳到危险键上）
         KeyCode[] excludes = new KeyCode[] { CurrentKey };
 
-        KeyCode newKey = PickNextKey != null ? PickNextKey.Invoke(excludes) : CurrentKey;
+        if (PickNextKey == null) { Debug.LogWarning("[Bird] PickNextKey 未设置，鸟无法移动！"); return; }
+        KeyCode newKey = PickNextKey.Invoke(excludes);
         if (newKey == CurrentKey || newKey == KeyCode.None) { ResetJumpTimer(); return; }
 
         CurrentKey = newKey;
@@ -97,6 +100,8 @@ public class Bird : MonoBehaviour
             if (_dangerKeys[i] == key) return true;
         return false;
     }
+
+    public KeyCode[] GetDangerKeys() => _dangerKeys;
 
     public void FlyToBranch(Transform branchParent, float localX)
     {

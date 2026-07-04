@@ -19,10 +19,18 @@ public class UIManager : MonoBehaviour
     [Header("树枝管理")]
     public BranchDisplay branchDisplay;
 
+    [Header("帮助面板")]
+    public GameObject helpPanel;
+
     // ========== Editor 一键生成 ==========
 
     [ContextMenu("Create UI")]
     void CreateUI()
+    {
+        CreateTexts();
+    }
+
+    void CreateTexts()
     {
         scoreText = MakeTMP("ScoreText", "得分: 0", 28,
             new Vector2(0, 1), new Vector2(0, 1), new Vector2(20, -30), new Vector2(260, 40));
@@ -90,7 +98,7 @@ public class UIManager : MonoBehaviour
     {
         SetText(scoreText, "按下小鸟所在的按键抓住它！");
         SetText(comboText, "避开危险键 — 按到立即结束！");
-        SetText(missText, "");
+        SetText(missText, "按 Tab 键查看游戏规则");
         SetText(dangerText, "");
         int bestScore = PlayerPrefs.GetInt("BestScore", 0);
         SetText(bestScoreText, $"最高: {bestScore}");
@@ -237,4 +245,16 @@ public class UIManager : MonoBehaviour
     void SetText(TextMeshProUGUI ui, string val) { if (ui != null) ui.text = val; }
     void SetColor(TextMeshProUGUI ui, Color c) { if (ui != null) ui.color = c; }
     string KeyDisplay(KeyCode key) => KeyCodeUtility.ToDisplayString(key);
+
+    // ========== 帮助面板 ==========
+
+    public void ToggleHelpPanel()
+    {
+        if (helpPanel == null) return;
+        helpPanel.SetActive(!helpPanel.activeSelf);
+        if (helpPanel.activeSelf)
+            helpPanel.transform.SetAsLastSibling();
+    }
+
+    public bool IsHelpPanelOpen() => helpPanel != null && helpPanel.activeSelf;
 }
