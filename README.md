@@ -17,11 +17,22 @@
 - **小鸟跳到 DangerKey 上** → 不计 Miss，但按该键立即 Game Over ⚠️
 - 分数越高，鸟跳得越快；DangerKey 数量随分数增加
 - DangerKey 更有可能出现在小鸟物理键盘位置的四周
+- **双鸟模式**：1000 分后 10% 概率出现两只鸟，0.2 秒内同时抓到 → 得分 ×3
+- **金鸟**：Combo 50/100/150... 时出现，抓到 → 得分 ×2
+
+### 道具
+
+| 图标 | 道具 | 效果 |
+|---|---|---|
+| ❄ 雪花 | 冻结 | 鸟静止 5 秒，全屏淡蓝遮罩 |
+| 💗 心形 | 无敌 | 4 秒内按错不扣、DangerKey 不死，全屏淡粉遮罩 |
+
+道具每抓 8~12 只鸟出现一次，分数越高停留越短（2.5s → 1s）。
 
 ### 计分
 
 ```text
-Score += 10 + Combo × 5
+每次抓取 = 10 + Combo × 5
 ```
 
 | Combo | 颜色 | 特效 |
@@ -37,10 +48,13 @@ Score += 10 + Combo × 5
 
 | 操作 | 效果 |
 |---|---|
-| 按鸟所在的键 | 抓取成功，彩色粒子爆出 |
+| 按鸟所在的键 | 抓取 + 得分 + 粒子效果 |
 | 按 DangerKey | Game Over + 全屏红闪 |
 | 按其他键 | Combo 清零 + Miss +1 |
-| 空格键（Game Over 后） | 重新开始 |
+| 按道具键 | 拾取道具 |
+| Tab | 打开/关闭帮助面板 |
+| 空格（Ready） | 开始游戏 |
+| 空格（GameOver） | 重新开始 |
 | 按住 Alt | 显示鼠标光标 |
 
 ---
@@ -51,60 +65,44 @@ Score += 10 + Combo × 5
 |---|---|
 | 引擎 | Unity 2022 LTS |
 | 平台 | Windows PC |
-| 脚本 | 12 个 C# 文件 |
-| 配置 | ScriptableObject 数据驱动 (`GameConfigSO`) |
+| 脚本 | 13 个 C# 文件 |
+| 代码行数 | ~2,500 行 |
+| 配置 | ScriptableObject 数据驱动（`GameConfigSO`） |
 | UI | TextMeshPro + STHUPO 中文字体 |
-| 音效 | AudioManager + 6 种 SFX + 随机 BGM |
-| 架构 | GameManager (Singleton) + Bird (回调注入) + 模块化组件 |
+| 音效 | AudioManager + 5 SFX + 随机 BGM + 占位 beep |
+| 架构 | GameManager (Singleton) + 组件解耦 |
 
 ### 项目结构
 
-```text
+```
 Assets/Scripts/
-├── GameManager.cs          # 游戏主控制器（状态机/输入/计分）
+├── GameManager.cs          # 主控制器（状态机/输入/计分/道具）
 ├── GameConfigSO.cs         # 数据配置
-├── Bird.cs                 # 小鸟实体（跳跃/DangerKey判定/飞行）
+├── Bird.cs                 # 小鸟实体（跳跃/DangerKey/飞行）
 ├── KeyboardDisplay.cs      # 虚拟键盘生成与高亮
-├── UIManager.cs            # UI 文本与 GameOver
+├── UIManager.cs            # UI 文本 + 帮助面板
 ├── BranchDisplay.cs        # 树枝管理（多根/随机落点）
 ├── AudioManager.cs         # 音效管理 + BGM
-├── ParticleManager.cs      # 粒子效果 + 全屏闪烁
-├── MaterialProvider.cs     # Doodle Shader 材质
+├── ParticleManager.cs      # 粒子效果 + 分数飘出
 ├── BackgroundGenerator.cs  # 程序化网格背景
 ├── TextWobble.cs           # 文字手绘抖动
 ├── KeyCodeUtility.cs       # KeyCode 工具
-└── KeyboardGridHelper.cs   # 物理键盘布局（DangerKey 邻近选键）
+├── KeyboardGridHelper.cs   # 物理键盘布局（邻近选键）
+└── MaterialProvider.cs     # Doodle Shader 材质
 ```
 
 完整架构文档见 [Architecture.md](Assets/Docs/Architecture.md)。
 
 ---
 
-## 开发原则
-
-- **KISS** — 每个脚本职责单一
-- **YAGNI** — 不预留"以后可能需要"的接口
-- **数据驱动** — 所有参数进 `GameConfigSO`
-- **80% 美术 + 20% Shader** — 手绘风格由素材主导
-
----
-
-## 构建
-
-1. 用 Unity 2022 LTS 打开项目
-2. `File → Build Settings → Build`
-3. 选择输出目录，点击 Build
-4. 运行生成的 `.exe`
-
----
-
-## 版本
+## 版本历史
 
 | 版本 | 日期 | 备注 |
 |---|---|---|
 | v0.1 | 2026-07-01 | MVP 核心玩法 |
-| v0.2 | 2026-07-01 | Doodle Shader + 音效 + 背景 + Ready 界面 |
-| v0.3 | 2026-07-02 | 重构完成 + 中文 UI + QWERTY DangerKey + 粒子特效 |
+| v0.2 | 2026-07-01 | Doodle Shader + 音效 + Ready 界面 |
+| v0.3 | 2026-07-02 | 重构 + 中文 UI + QWERTY DangerKey + 道具系统 |
+| **v1.0** | **2026-07-02** | **正式版** — 双鸟 + 金鸟 + QA 修复 + 帮助面板 |
 
 ---
 
@@ -112,10 +110,12 @@ Assets/Scripts/
 
 | 文档 | 说明 |
 |---|---|
+| [game-rules.md](Assets/Docs/game-rules.md) | 完整游戏规则 |
+| [project-status.md](Assets/Docs/project-status.md) | 项目功能清单 |
 | [design.md](Assets/Docs/design.md) | 游戏设计文档 |
-| [dev-plan.md](Assets/Docs/dev-plan.md) | 开发计划与 Task 拆分 |
-| [post-mvp-plan.md](Assets/Docs/post-mvp-plan.md) | 后续完整开发计划 |
-| [Architecture.md](Assets/Docs/Architecture.md) | 代码架构文档 |
+| [dev-plan.md](Assets/Docs/dev-plan.md) | 开发计划 |
+| [post-mvp-plan.md](Assets/Docs/post-mvp-plan.md) | 后续开发计划 |
+| [Architecture.md](Assets/Docs/Architecture.md) | 代码架构 |
 | [TODO.md](Assets/Docs/TODO.md) | 后续功能清单 |
 
 ---
