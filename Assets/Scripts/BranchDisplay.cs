@@ -17,6 +17,28 @@ public class BranchDisplay : MonoBehaviour
     const float BIRD_HEIGHT = 20f;
     const int SLOTS_PER_BRANCH = 7;
 
+    /// <summary>随机选一根树枝上一只鸟，没有则返回 null</summary>
+    public Bird GetRandomBranchBird()
+    {
+        if (branches == null) return null;
+        // 随机顺序遍历树枝
+        int[] order = new int[branches.Length];
+        for (int i = 0; i < order.Length; i++) order[i] = i;
+        for (int i = 0; i < order.Length; i++) { int r = Random.Range(i, order.Length); (order[i], order[r]) = (order[r], order[i]); }
+
+        for (int t = 0; t < order.Length; t++)
+        {
+            if (branches[order[t]] == null) continue;
+            Transform c = branches[order[t]].Find("BirdContainer");
+            if (c == null || c.childCount == 0) continue;
+            // 从该树枝上随机选一只鸟
+            int idx = Random.Range(0, c.childCount);
+            var bird = c.GetChild(idx).GetComponent<Bird>();
+            if (bird != null) return bird;
+        }
+        return null;
+    }
+
     /// <summary>所有树枝已满时 GetNextBranchX 返回此值</summary>
     public const float NO_SLOT = float.MinValue;
 

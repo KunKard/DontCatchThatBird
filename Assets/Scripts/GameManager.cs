@@ -53,12 +53,8 @@ public class GameManager : MonoBehaviour
     PowerUpType _powerUpType;
     float _powerUpTimer;
     int _nextPowerUpCycleStart = 8;
+    int _effectiveCatches;
 
-    // 双鸟
-    Bird _secondBird;
-    float _dualBirdTimer;
-    bool _dualBirdFirstCaught;
-    bool _dualBirdResolved;
 
     // 冻结状态
     float _freezeTimer;
@@ -104,9 +100,11 @@ public class GameManager : MonoBehaviour
         else
             Cursor.visible = false;
 
-        // Tab 切换帮助面板
+        // Tab 切换帮助面板，ESC 退出游戏
         if (Input.GetKeyDown(KeyCode.Tab))
             uiManager.ToggleHelpPanel();
+        if (Input.GetKeyDown(KeyCode.Escape))
+            Application.Quit();
 
         if (state == GameState.Ready)
         {
@@ -128,7 +126,6 @@ public class GameManager : MonoBehaviour
         UpdatePowerUp();
         UpdateFreeze();
         UpdateInvincible();
-        UpdateDualBird();
 
         for (int i = 0; i < config.validKeys.Length; i++)
         {
@@ -189,7 +186,7 @@ public class GameManager : MonoBehaviour
             return;
         }
 
-        if (currentBird.IsDangerKey(key) || (_secondBird != null && _secondBird.IsDangerKey(key)))
+        if (currentBird.IsDangerKey(key))
         {
             if (_isInvincible)
             {
@@ -212,12 +209,6 @@ public class GameManager : MonoBehaviour
             AudioManager.Instance?.PlayCatch();
             CatchBird();
         }
-        else if (_secondBird != null && key == _secondBird.CurrentKey)
-        {
-            keyboardDisplay.FlashCorrectKey(key);
-            AudioManager.Instance?.PlayCatch();
-            CatchSecondBird();
-        }
         else
         {
             if (!_isInvincible)
@@ -229,6 +220,7 @@ public class GameManager : MonoBehaviour
             }
             keyboardDisplay.FlashWrongKey(key);
             AudioManager.Instance?.PlayMiss();
+            FlashBranchBird();
             if (missCount >= config.maxMissCount)
                 TriggerGameOver(GameOverReason.MissLimit);
         }
@@ -238,9 +230,6 @@ public class GameManager : MonoBehaviour
     {
         bool isGolden = currentBird != null && currentBird.isGolden;
 
-        // 如果 UpdateDualBird 已在该帧处理超时并调用了 SpawnBird，则跳过自己的 SpawnBird
-        bool skipSpawn = _dualBirdResolved;
-
         int scoreGained = config.baseScore + combo * config.comboMultiplier;
         if (isGolden) scoreGained *= 2;
         score += scoreGained;
@@ -249,13 +238,6 @@ public class GameManager : MonoBehaviour
         totalCaught++;
 
         if (combo > highestCombo) highestCombo = combo;
-
-        // 双鸟：标记首次是否在窗口内捕获
-        if (_secondBird != null && !_dualBirdFirstCaught)
-        {
-            _dualBirdFirstCaught = true;
-            _dualBirdTimer = 0.2f;
-        }
 
         uiManager.UpdateScore(score);
         uiManager.UpdateCombo(combo);
@@ -270,12 +252,11 @@ public class GameManager : MonoBehaviour
             ParticleManager.Instance?.SpawnScorePopup(currentBird.transform.position, scoreGained, combo);
         }
 
-        Bird oldBird = currentBird;
+        // 道具持续期间不计入有效抓取
+        if (_powerUpIcon == null) _effectiveCatches++;
 
-        // 双鸟模式：等两只都抓到或超时才刷新
-        bool waitingForSecondBird = !_dualBirdResolved && _secondBird != null && _dualBirdFirstCaught && _dualBirdTimer > 0f;
-        if (!waitingForSecondBird && !skipSpawn)
-            SpawnBird();
+        Bird oldBird = currentBird;
+        SpawnBird();
 
         float branchX = uiManager.GetNextBranchX();
         if (branchX == BranchDisplay.NO_SLOT)
@@ -289,71 +270,6 @@ public class GameManager : MonoBehaviour
         }
     }
 
-    void CatchSecondBird()
-    {
-        int scoreGained = config.baseScore + combo * config.comboMultiplier;
-
-        // 在窗口内 → 三倍分！
-        bool inWindow = _dualBirdFirstCaught && _dualBirdTimer > 0f;
-        if (inWindow) scoreGained *= 3;
-
-        score += scoreGained;
-        totalCaught++;
-
-        uiManager.UpdateScore(score);
-        uiManager.UpdateCombo(combo);
-
-        if (_secondBird != null)
-        {
-            if (inWindow)
-                ParticleManager.Instance?.SpawnGoldenParticles(_secondBird.transform.position);
-            else
-                ParticleManager.Instance?.SpawnCatchParticles(_secondBird.transform.position);
-            ParticleManager.Instance?.SpawnScorePopup(_secondBird.transform.position, scoreGained, combo);
-        }
-
-        // 抓到第二只 → 刷新鸟
-        Transform branchContainer = uiManager.GetBranchContainer();
-        float branchX = uiManager.GetNextBranchX();
-        if (_secondBird != null && branchX != BranchDisplay.NO_SLOT && branchContainer != null)
-            _secondBird.FlyToBranch(branchContainer, branchX);
-        else if (_secondBird != null)
-            Destroy(_secondBird.gameObject);
-
-        DestroySecondBird();
-        SpawnBird();
-        _dualBirdResolved = false;
-    }
-
-    void UpdateDualBird()
-    {
-        if (_secondBird == null || _dualBirdResolved) return;
-        _dualBirdTimer -= Time.deltaTime;
-        if (_dualBirdTimer <= 0f && _dualBirdFirstCaught)
-        {
-            _dualBirdResolved = true;
-            Destroy(_secondBird.gameObject);
-            _secondBird = null;
-            _dualBirdFirstCaught = false;
-            _dualBirdTimer = 0f;
-            SpawnBird();
-            _dualBirdResolved = false;
-        }
-    }
-
-    void DestroySecondBird()
-    {
-        if (_secondBird != null)
-        {
-            _secondBird.SetActive(false);
-            Destroy(_secondBird.gameObject);
-            _dualBirdResolved = true;
-        }
-        _secondBird = null;
-        _dualBirdFirstCaught = false;
-        _dualBirdTimer = 0f;
-    }
-
     public void SpawnBird()
     {
         int dangerKeyCount = GetDangerKeyCount();
@@ -364,7 +280,7 @@ public class GameManager : MonoBehaviour
 
         Transform parent = mainCanvas != null ? mainCanvas.transform : transform;
 
-        bool isGolden = combo > 0 && combo % 50 == 0;
+        bool isGolden = combo > 0 && combo % 30 == 0;
         bool hasArt = birdSprites.normal != null;
         Sprite normalSprite = hasArt ? birdSprites.normal : GetFallbackCircle();
         Color birdColor;
@@ -393,41 +309,6 @@ public class GameManager : MonoBehaviour
         keyboardDisplay.HighlightKey(birdKey);
         uiManager.UpdateDangerKeys(dangerKeys);
 
-        // 双鸟：分数 > 1000 时 10% 概率生成第二只鸟
-        if (score > 1000 && Random.value < 0.1f)
-        {
-            KeyCode secondKey = PickRandomKeyExcluding(new[] { birdKey });
-            if (secondKey != KeyCode.None)
-            {
-                // 双鸟跳跃间隔 +0.5s
-                var dualInterval = GetBirdInterval(score);
-                dualInterval.min += 0.5f;
-                dualInterval.max += 0.5f;
-                currentBird.JumpInterval = dualInterval;
-
-                GameObject go2 = new GameObject("Bird2", typeof(RectTransform));
-                go2.transform.SetParent(parent, false);
-                Image img2 = go2.AddComponent<Image>();
-                img2.sprite = normalSprite;
-                img2.color = birdColor;
-                img2.raycastTarget = false;
-                img2.preserveAspect = true;
-                var b2 = go2.AddComponent<Bird>();
-                b2.JumpInterval = dualInterval;
-                b2.Init(secondKey, dangerKeys, config, normalSprite, birdSprites.fly, birdSprites.stand, birdColor, isActive: !_isFrozen);
-                b2.PickNextKey = excludes => PickRandomKeyExcluding(AddPowerUpExclude(excludes));
-                b2.OnJumped += (b, newKey) =>
-                {
-                    keyboardDisplay.ClearHighlight();
-                    b.transform.position = keyboardDisplay.GetKeyPosition(newKey);
-                    keyboardDisplay.HighlightKey(newKey);
-                    AudioManager.Instance?.PlayJump();
-                    if (!_isFrozen) OnBirdJumped();
-                };
-                go2.transform.position = keyboardDisplay.GetKeyPosition(secondKey);
-                _secondBird = b2;
-            }
-        }
     }
 
     void WireUpBird(Bird bird)
@@ -455,15 +336,15 @@ public class GameManager : MonoBehaviour
     void UpdatePowerUp()
     {
         // 每 8~12 只触发一次道具
-        bool inWindow = totalCaught >= _nextPowerUpCycleStart && totalCaught <= _nextPowerUpCycleStart + 4;
+        bool inWindow = _effectiveCatches >= _nextPowerUpCycleStart && _effectiveCatches <= _nextPowerUpCycleStart + 4;
         if (inWindow && _powerUpIcon == null)
         {
             if (Random.value < 0.02f)
                 SpawnPowerUp();
         }
 
-        if (totalCaught > _nextPowerUpCycleStart + 4)
-            _nextPowerUpCycleStart = totalCaught + 8;
+        if (_effectiveCatches > _nextPowerUpCycleStart + 4)
+            _nextPowerUpCycleStart = _effectiveCatches + 8;
 
         // 道具超时消失
         if (_powerUpIcon != null)
@@ -476,7 +357,7 @@ public class GameManager : MonoBehaviour
 
     void SpawnPowerUp()
     {
-        _nextPowerUpCycleStart = totalCaught + 8;
+        _nextPowerUpCycleStart = _effectiveCatches + 8;
         _powerUpType = Random.value < 0.5f ? PowerUpType.Freeze : PowerUpType.ResetMiss;
 
         // 选随机键（排除鸟键、DangerKeys、已有道具键）
@@ -538,7 +419,6 @@ public class GameManager : MonoBehaviour
             _isFrozen = true;
             _freezeTimer = 5f;
             if (currentBird != null) currentBird.SetActive(false);
-            if (_secondBird != null) _secondBird.SetActive(false);
             ParticleManager.Instance?.SpawnPowerUpParticles(pos, new Color(0.4f, 0.7f, 1f));
             ShowFreezeOverlay(true);
         }
@@ -564,7 +444,6 @@ public class GameManager : MonoBehaviour
         {
             _isFrozen = false;
             if (currentBird != null) currentBird.SetActive(true);
-            if (_secondBird != null) _secondBird.SetActive(true);
             ShowFreezeOverlay(false);
         }
     }
@@ -654,12 +533,11 @@ public class GameManager : MonoBehaviour
         ShowInvincibleOverlay(false);
 
         RemovePowerUp();
-        _nextPowerUpCycleStart = totalCaught + 8;
-        _dualBirdResolved = false;
+        _effectiveCatches = 0;
+        _nextPowerUpCycleStart = 8;
 
         if (currentBird != null && currentBird.gameObject != _readyBird)
             Destroy(currentBird.gameObject);
-        DestroySecondBird();
 
         if (_readyBird != null)
         {
@@ -724,6 +602,7 @@ public class GameManager : MonoBehaviour
         if (_isInvincible) return;
         missCount++;
         uiManager.UpdateMiss(missCount);
+        FlashBranchBird();
         if (missCount >= config.maxMissCount)
             TriggerGameOver(GameOverReason.MissLimit);
     }
@@ -742,11 +621,7 @@ public class GameManager : MonoBehaviour
         state = GameState.GameOver;
         AudioManager.Instance?.DuckBGM(true);
         keyboardDisplay.ClearHighlight();
-        if (_secondBird != null) { Destroy(_secondBird.gameObject); _secondBird = null; }
         if (currentBird != null) { Destroy(currentBird.gameObject); currentBird = null; }
-        _dualBirdFirstCaught = false;
-        _dualBirdTimer = 0f;
-        _dualBirdResolved = false;
         ShowFreezeOverlay(false);
         ShowInvincibleOverlay(false);
         if (score > _bestScore)
@@ -818,6 +693,15 @@ public class GameManager : MonoBehaviour
         for (int i = 0; i < levels.Length; i++)
             if (score >= levels[i].scoreThreshold) best = levels[i];
         return (best.minInterval, best.maxInterval);
+    }
+
+    void FlashBranchBird()
+    {
+        if (uiManager != null && uiManager.branchDisplay != null)
+        {
+            var bird = uiManager.branchDisplay.GetRandomBranchBird();
+            if (bird != null) bird.FlashToFly();
+        }
     }
 
     public KeyCode PickRandomKeyExcluding(KeyCode[] excludes)

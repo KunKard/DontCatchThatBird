@@ -140,6 +140,21 @@ public class Bird : MonoBehaviour
         if (_standSprite != null) _image.sprite = _standSprite;
     }
 
+    /// <summary>树枝上的鸟闪一下飞起 Sprite，0.3s 恢复</summary>
+    public void FlashToFly()
+    {
+        if (_flySprite == null || _standSprite == null || _image == null) return;
+        StopAllCoroutines();
+        StartCoroutine(FlashRoutine());
+    }
+
+    IEnumerator FlashRoutine()
+    {
+        _image.sprite = _flySprite;
+        yield return new WaitForSeconds(0.5f);
+        if (_image != null && _standSprite != null) _image.sprite = _standSprite;
+    }
+
     public static Sprite CreateCircleSprite(int size)
     {
         Texture2D tex = new Texture2D(size, size, TextureFormat.RGBA32, false);
